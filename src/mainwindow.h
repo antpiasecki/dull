@@ -12,7 +12,7 @@ public:
   explicit MainWindow(QWidget *parent = nullptr);
 
 private:
-  Ui::MainWindow *ui;
+  std::unique_ptr<Ui::MainWindow> ui;
 
   std::unique_ptr<Vault> m_vault;
 

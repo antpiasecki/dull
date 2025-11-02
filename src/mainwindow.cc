@@ -6,8 +6,10 @@
 #include <QTemporaryFile>
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), ui(new Ui::MainWindow) {
+    : QMainWindow(parent), ui(std::make_unique<Ui::MainWindow>()) {
   ui->setupUi(this);
+
+  ui->filePreview->setVisible(false);
 
   connect(ui->actionNew, &QAction::triggered, this, [this]() {
     QString path = QFileDialog::getSaveFileName(this, "Choose vault location",
@@ -33,10 +35,9 @@ MainWindow::MainWindow(QWidget *parent)
     reload_fs_tree();
   });
 
-  connect(ui->fsTreeWidget, &QTreeWidget::itemClicked,
-          [this](QTreeWidgetItem *item, int column) {
-            preview_file(item->text(column).toStdString());
-          });
+  connect(
+      ui->fsTreeWidget, &QTreeWidget::itemClicked,
+      [this](QTreeWidgetItem *, int) { ui->filePreview->setVisible(false); });
 
   connect(ui->fsTreeWidget, &QTreeWidget::customContextMenuRequested, this,
           &MainWindow::file_context_menu);
@@ -54,7 +55,7 @@ MainWindow::MainWindow(QWidget *parent)
       std::string content((std::istreambuf_iterator<char>(file)),
                           std::istreambuf_iterator<char>());
 
-      m_vault->write_file(path_to_filename(path.toStdString()), content);
+      m_vault->create_file(path_to_filename(path.toStdString()), content);
     }
 
     reload_fs_tree();
@@ -62,6 +63,7 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 void MainWindow::reload_fs_tree() {
+  ui->menuFiles->setEnabled(true);
   ui->fsTreeWidget->clear();
 
   auto headers = m_vault->read_file_headers();
@@ -69,11 +71,14 @@ void MainWindow::reload_fs_tree() {
     auto *item = new QTreeWidgetItem(ui->fsTreeWidget);
     item->setText(0, QString::fromStdString(header.name));
     item->setText(1, QString::number(header.size));
+    item->setText(2, QString::number(header.offset));
   }
   ui->fsTreeWidget->resizeColumnToContents(0);
 }
 
 void MainWindow::preview_file(const std::string &filename) {
+  ui->filePreview->setVisible(true);
+
   auto content = m_vault->read_file(filename);
   if (content) {
     ui->filePreview->setText(QString::fromStdString(content.value()));
@@ -102,6 +107,8 @@ void MainWindow::edit_file(const std::string &filename) {
     QTextStream in(&temp_file);
     m_vault->update_file(filename, in.readAll().toStdString());
     reload_fs_tree();
+
+    // QTemporaryFile gets deleted when it goes out of scope
   } else {
     qWarning() << "File to edit not found";
   }
@@ -114,6 +121,11 @@ void MainWindow::file_context_menu(const QPoint &pos) {
   }
 
   QMenu menu(this);
+
+  QAction *preview_action = menu.addAction(
+      style()->standardIcon(QStyle::SP_FileDialogContentsView), "Preview");
+  connect(preview_action, &QAction::triggered, this,
+          [this, item]() { preview_file(item->text(0).toStdString()); });
 
   QAction *edit_action = menu.addAction(
       style()->standardIcon(QStyle::SP_FileDialogDetailedView), "Edit");

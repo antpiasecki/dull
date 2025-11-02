@@ -15,6 +15,8 @@ encrypt_xchacha20_poly1305(const Botan::secure_vector<u8> &plaintext,
   ASSERT(key.size() == 32);
   ASSERT(nonce.size() == 24);
 
+  // XChaCha20 is selected automatically based on the nonce size
+  // https://github.com/randombit/botan/blob/master/src/lib/stream/chacha/chacha.cpp#L375
   auto cipher = Botan::AEAD_Mode::create_or_throw(
       "ChaCha20Poly1305", Botan::Cipher_Dir::Encryption);
 

@@ -19,7 +19,7 @@ Vault::Vault(std::string path) : m_path(std::move(path)) {
   ASSERT(static_cast<bool>(m_file.read(header.data(), header.size())));
   ASSERT(std::string_view(header.data(), header.size()) == "DULL");
 
-  std::int16_t version = 0;
+  i16 version = 0;
   ASSERT(m_file.read(reinterpret_cast<char *>(&version), sizeof(version)));
   ASSERT(version == VERSION);
 }
@@ -31,19 +31,13 @@ std::vector<FileHeader> Vault::read_file_headers() {
   m_file.seekg(AFTER_HEADER_OFFSET, std::ios::beg);
 
   while (true) {
-    u64 name_size = 0;
-    if (!m_file.read(reinterpret_cast<char *>(&name_size), sizeof(u64))) {
+    auto header = read_file_header(m_file);
+    if (header) {
+      headers.push_back(header.value());
+      m_file.seekg(static_cast<i64>(header->size), std::ios::cur);
+    } else {
       break;
     }
-
-    FileHeader header{};
-    header.name.resize(name_size);
-    m_file.read(header.name.data(), static_cast<i64>(name_size));
-
-    m_file.read(reinterpret_cast<char *>(&header.size), sizeof(u64));
-    m_file.seekg(static_cast<i64>(header.size), std::ios::cur);
-
-    headers.push_back(header);
   }
 
   return headers;
@@ -54,46 +48,42 @@ std::optional<std::string> Vault::read_file(const std::string &filename) {
   m_file.seekg(AFTER_HEADER_OFFSET, std::ios::beg);
 
   while (true) {
-    u64 name_size = 0;
-    if (!m_file.read(reinterpret_cast<char *>(&name_size), sizeof(u64))) {
+    auto header = read_file_header(m_file);
+    if (!header) {
       break;
     }
 
-    std::string name;
-    name.resize(name_size);
-    m_file.read(name.data(), static_cast<i64>(name_size));
-
-    u64 content_size = 0;
-    m_file.read(reinterpret_cast<char *>(&content_size), sizeof(u64));
-
-    if (name == filename) {
-      std::string content(content_size, '\0');
-      m_file.read(content.data(), static_cast<i64>(content_size));
+    if (header->name == filename) {
+      std::string content(header->size, '\0');
+      if (!m_file.read(content.data(), static_cast<i64>(header->size))) {
+        break;
+      }
       return content;
     }
 
-    m_file.seekg(static_cast<i64>(content_size), std::ios::cur);
+    m_file.seekg(static_cast<i64>(header->size), std::ios::cur);
   }
 
   return std::nullopt;
 }
 
-void Vault::write_file(const std::string &filename,
-                       const std::string &content) {
+void Vault::create_file(const std::string &filename,
+                        const std::string &content) {
   m_file.clear();
   m_file.seekp(0, std::ios::end);
 
   u64 filename_size = filename.size();
   u64 content_size = content.size();
-  m_file.write(reinterpret_cast<const char *>(&filename_size), sizeof(u64));
-  m_file.write(filename.data(), static_cast<i64>(filename_size));
-  m_file.write(reinterpret_cast<const char *>(&content_size), sizeof(u64));
-  m_file.write(content.data(), static_cast<i64>(content_size));
+  ASSERT(m_file.write(reinterpret_cast<const char *>(&filename_size),
+                      sizeof(u64)));
+  ASSERT(m_file.write(filename.data(), static_cast<i64>(filename_size)));
+  ASSERT(
+      m_file.write(reinterpret_cast<const char *>(&content_size), sizeof(u64)));
+  ASSERT(m_file.write(content.data(), static_cast<i64>(content_size)));
   m_file.flush();
 }
 
-void Vault::update_file(const std::string &filename,
-                        const std::string &content) {
+void Vault::delete_file(const std::string &filename) {
   m_file.clear();
   m_file.seekg(AFTER_HEADER_OFFSET, std::ios::beg);
 
@@ -103,26 +93,20 @@ void Vault::update_file(const std::string &filename,
   while (true) {
     i64 current_pos = m_file.tellg();
 
-    u64 name_size = 0;
-    if (!m_file.read(reinterpret_cast<char *>(&name_size), sizeof(u64))) {
+    auto header = read_file_header(m_file);
+    if (!header) {
       break;
     }
 
-    std::string name;
-    name.resize(name_size);
-    m_file.read(name.data(), static_cast<i64>(name_size));
-
-    u64 content_size = 0;
-    m_file.read(reinterpret_cast<char *>(&content_size), sizeof(u64));
-
-    if (name == filename) {
+    if (header->name == filename) {
       entry_start = current_pos;
-      entry_total_size = sizeof(u64) + name_size + sizeof(u64) + content_size;
-      m_file.seekg(static_cast<i64>(content_size), std::ios::cur);
+      entry_total_size =
+          sizeof(u64) + header->name.length() + sizeof(u64) + header->size;
+      m_file.seekg(static_cast<i64>(header->size), std::ios::cur);
       break;
     }
 
-    m_file.seekg(static_cast<i64>(content_size), std::ios::cur);
+    m_file.seekg(static_cast<i64>(header->size), std::ios::cur);
   }
 
   if (entry_start != -1) {
@@ -136,7 +120,7 @@ void Vault::update_file(const std::string &filename,
 
     m_file.clear();
     m_file.seekp(entry_start, std::ios::beg);
-    m_file.write(remaining.data(), static_cast<i64>(remaining.size()));
+    ASSERT(m_file.write(remaining.data(), static_cast<i64>(remaining.size())));
 
     i64 new_size = entry_start + static_cast<i64>(remaining.size());
     m_file.flush();
@@ -147,6 +131,32 @@ void Vault::update_file(const std::string &filename,
     m_file.open(m_path, std::ios::in | std::ios::out | std::ios::binary);
     ASSERT(m_file.good());
   }
+}
 
-  write_file(filename, content);
+void Vault::update_file(const std::string &filename,
+                        const std::string &content) {
+  delete_file(filename);
+  create_file(filename, content);
+}
+
+std::optional<FileHeader> Vault::read_file_header(std::fstream &file) {
+  FileHeader header{};
+  header.offset = file.tellg();
+
+  u64 name_size = 0;
+  if (!file.read(reinterpret_cast<char *>(&name_size), sizeof(u64))) {
+    return std::nullopt;
+  }
+
+  ASSERT(name_size < 10000);
+
+  header.name.resize(name_size);
+  if (!file.read(header.name.data(), static_cast<i64>(name_size))) {
+    return std::nullopt;
+  }
+
+  if (!file.read(reinterpret_cast<char *>(&header.size), sizeof(u64))) {
+    return std::nullopt;
+  }
+  return header;
 }

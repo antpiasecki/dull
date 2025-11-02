@@ -5,11 +5,14 @@
 #include <string>
 
 #define ASSERT(cond)                                                           \
-  if (!(cond)) {                                                               \
-    std::cerr << "ASSERTION FAILED at " << __FILE__ << ":" << __LINE__ << "\n" \
-              << #cond << std::endl;                                           \
-    abort();                                                                   \
-  }
+  do {                                                                         \
+    if (!(cond)) {                                                             \
+      std::cerr << "ASSERTION FAILED at " << __FILE__ << ":" << __LINE__       \
+                << "\n"                                                        \
+                << #cond << std::endl;                                         \
+      abort();                                                                 \
+    }                                                                          \
+  } while (0)
 
 using u8 = unsigned char;
 using i16 = int16_t;
