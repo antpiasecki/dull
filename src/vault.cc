@@ -2,7 +2,6 @@
 #include "common.h"
 #include <array>
 #include <filesystem>
-#include <iostream>
 
 Vault::Vault(std::string path) : m_path(std::move(path)) {
   m_file.open(m_path, std::ios::in | std::ios::out | std::ios::binary);
