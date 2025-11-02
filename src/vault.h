@@ -20,6 +20,7 @@ public:
   std::vector<FileHeader> read_file_headers();
   std::optional<std::string> read_file(const std::string &name);
   void write_file(const std::string &name, const std::string &content);
+  void update_file(const std::string &name, const std::string &content);
 
 private:
   std::string m_path;

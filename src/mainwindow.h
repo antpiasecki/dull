@@ -3,6 +3,7 @@
 #include "ui_mainwindow.h"
 #include "vault.h"
 #include <QMainWindow>
+#include <memory>
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
@@ -13,7 +14,7 @@ public:
 private:
   Ui::MainWindow *ui;
 
-  std::optional<Vault> m_vault;
+  std::unique_ptr<Vault> m_vault;
 
   void reload_fs_tree();
   void preview_file(const std::string &filename);

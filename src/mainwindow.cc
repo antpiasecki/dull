@@ -1,6 +1,8 @@
 #include "mainwindow.h"
+#include <QDesktopServices>
 #include <QFileDialog>
 #include <QInputDialog>
+#include <QMessageBox>
 #include <QTemporaryFile>
 #include <iostream>
 
@@ -16,7 +18,7 @@ MainWindow::MainWindow(QWidget *parent)
       return;
     }
 
-    m_vault = Vault(path.toStdString());
+    m_vault = std::make_unique<Vault>(path.toStdString());
     reload_fs_tree();
   });
 
@@ -28,7 +30,7 @@ MainWindow::MainWindow(QWidget *parent)
       return;
     }
 
-    m_vault = Vault(path.toStdString());
+    m_vault = std::make_unique<Vault>(path.toStdString());
     reload_fs_tree();
   });
 
@@ -40,38 +42,21 @@ MainWindow::MainWindow(QWidget *parent)
   connect(ui->fsTreeWidget, &QTreeWidget::customContextMenuRequested, this,
           &MainWindow::file_context_menu);
 
-  connect(ui->actionAddFile, &QAction::triggered, this, [this]() {
+  connect(ui->actionAddFiles, &QAction::triggered, this, [this]() {
     if (!m_vault) {
       return;
     }
 
-    QString path = QFileDialog::getOpenFileName(this, "Choose a file to add");
-    if (path.isEmpty()) {
-      return;
+    QStringList paths =
+        QFileDialog::getOpenFileNames(this, "Choose files to add");
+    for (const auto &path : paths) {
+      std::ifstream file(path.toStdString(), std::ios::binary);
+
+      std::string content((std::istreambuf_iterator<char>(file)),
+                          std::istreambuf_iterator<char>());
+
+      m_vault->write_file(path_to_filename(path.toStdString()), content);
     }
-
-    std::ifstream file(path.toStdString(), std::ios::binary);
-
-    std::string content((std::istreambuf_iterator<char>(file)),
-                        std::istreambuf_iterator<char>());
-
-    m_vault->write_file(path_to_filename(path.toStdString()), content);
-
-    reload_fs_tree();
-  });
-
-  connect(ui->actionCreateFile, &QAction::triggered, this, [this]() {
-    if (!m_vault) {
-      return;
-    }
-
-    QString path =
-        QInputDialog::getText(this, "Create File", "Where to create the file");
-    if (path.isEmpty()) {
-      return;
-    }
-
-    m_vault->write_file(path.toStdString(), "");
 
     reload_fs_tree();
   });
@@ -84,7 +69,9 @@ void MainWindow::reload_fs_tree() {
   for (const auto &header : headers) {
     auto *item = new QTreeWidgetItem(ui->fsTreeWidget);
     item->setText(0, QString::fromStdString(header.name));
+    item->setText(1, QString::number(header.size));
   }
+  ui->fsTreeWidget->resizeColumnToContents(0);
 }
 
 void MainWindow::preview_file(const std::string &filename) {
@@ -107,9 +94,15 @@ void MainWindow::edit_file(const std::string &filename) {
     }
     temp_file.flush();
 
-    // TODO: xdg-open or something
-    std::system(("kwrite " + temp_file.fileName()).toStdString().c_str());
-    // TODO: write back
+    QDesktopServices::openUrl(QUrl::fromLocalFile(temp_file.fileName()));
+    QMessageBox::information(this, "Edit",
+                             "Please edit the file in the opened editor and "
+                             "save it. Click OK when done.");
+
+    temp_file.seek(0);
+    QTextStream in(&temp_file);
+    m_vault->update_file(filename, in.readAll().toStdString());
+    reload_fs_tree();
   } else {
     qWarning() << "File to edit not found";
   }

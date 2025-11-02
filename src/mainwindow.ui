@@ -20,9 +20,17 @@
       <property name="contextMenuPolicy">
        <enum>Qt::ContextMenuPolicy::CustomContextMenu</enum>
       </property>
+      <attribute name="headerStretchLastSection">
+       <bool>false</bool>
+      </attribute>
       <column>
        <property name="text">
         <string>Name</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Size</string>
        </property>
       </column>
      </widget>
@@ -52,8 +60,7 @@
     <property name="title">
      <string>Files</string>
     </property>
-    <addaction name="actionCreateFile"/>
-    <addaction name="actionAddFile"/>
+    <addaction name="actionAddFiles"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuFiles"/>
@@ -68,7 +75,7 @@
     <string>Open</string>
    </property>
   </action>
-  <action name="actionAddFile">
+  <action name="actionAddFiles">
    <property name="text">
     <string>Add</string>
    </property>
