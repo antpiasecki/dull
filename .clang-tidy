@@ -1,0 +1,1 @@
+Checks: '*,clang-analyzer-*,-llvmlibc-*,-fuchsia-*,-altera-*,-abseil-*,-android-*,-modernize-use-trailing-return-type,-readability-identifier-length,-*-readability-todo,-*-magic-numbers,-readability-function-cognitive-complexity,-*-easily-swappable-parameters'
