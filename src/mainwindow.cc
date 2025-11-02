@@ -1,10 +1,9 @@
 #include "mainwindow.h"
-#include "common.h"
+#include "vault.h"
 #include <QDebug>
 #include <QFileDialog>
 #include <QTreeWidgetItem>
 #include <fstream>
-#include <iostream>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow) {
@@ -20,19 +19,13 @@ MainWindow::MainWindow(QWidget *parent)
 
     {
       std::ofstream file(path.toStdString(), std::ios::binary);
-      file.write("DULL", 4);
+      Vault::write_header(file);
 
-      std::string file_name = "hello.txt";
-      u64 file_name_size = file_name.size();
-      std::string file_content = "Hello, World!";
-      u64 file_size = file_content.size();
-      file.write(reinterpret_cast<const char *>(&file_name_size), sizeof(u64));
-      file.write(file_name.data(), static_cast<i64>(file_name_size));
-      file.write(reinterpret_cast<const char *>(&file_size), sizeof(u64));
-      file.write(file_content.data(), static_cast<i64>(file_size));
+      Vault::write_file(file, "hello.txt", "Hello, World!");
+      Vault::write_file(file, "test.txt", "test test test");
     }
 
-    m_vault_path = path;
+    m_vault_path = path.toStdString();
     reload_vault();
   });
 
@@ -44,39 +37,52 @@ MainWindow::MainWindow(QWidget *parent)
       return;
     }
 
-    m_vault_path = path;
+    m_vault_path = path.toStdString();
     reload_vault();
   });
+
+  connect(ui->fsTreeWidget, &QTreeWidget::itemClicked,
+          [this](QTreeWidgetItem *item, int column) {
+            preview_file(item->text(column).toStdString());
+          });
 }
 
 void MainWindow::reload_vault() {
   ui->fsTreeWidget->clear();
 
-  std::ifstream file(m_vault_path.toStdString(), std::ios::binary);
-  ASSERT(file.good());
-
-  std::array<i8, 4> header{};
-  ASSERT(file.read(header.data(), header.size()));
-
-  ASSERT(std::string_view(reinterpret_cast<i8 *>(header.data()),
-                          header.size()) == "DULL");
+  std::ifstream file(m_vault_path, std::ios::binary);
+  Vault::verify_header(file);
 
   while (true) {
-    u64 name_size = 0;
-    if (!file.read(reinterpret_cast<char *>(&name_size), sizeof(u64))) {
+    auto header = Vault::read_file_header(file);
+    if (!header) {
+      break;
+    }
+    file.seekg(static_cast<i64>(header->size), std::ios::cur);
+
+    auto *item = new QTreeWidgetItem(ui->fsTreeWidget);
+    item->setText(0, QString::fromStdString(header->name));
+  }
+}
+
+void MainWindow::preview_file(const std::string &filename) {
+  std::ifstream file(m_vault_path, std::ios::binary);
+  Vault::verify_header(file);
+
+  while (true) {
+    auto header = Vault::read_file_header(file);
+    if (!header) {
       break;
     }
 
-    std::string name(name_size, '\0');
-    file.read(name.data(), static_cast<i64>(name_size));
-
-    u64 content_size = 0;
-    file.read(reinterpret_cast<char *>(&content_size), sizeof(u64));
-
-    std::string content(content_size, '\0');
-    file.read(content.data(), static_cast<i64>(content_size));
-
-    auto *item = new QTreeWidgetItem(ui->fsTreeWidget);
-    item->setText(0, QString::fromStdString(name));
+    if (header->name == filename) {
+      std::string content(header->size, '\0');
+      file.read(content.data(), static_cast<i64>(header->size));
+      ui->filePreview->setText(QString::fromStdString(content));
+      return;
+    }
+    file.seekg(static_cast<i64>(header->size), std::ios::cur);
   }
+
+  ASSERT(false);
 }

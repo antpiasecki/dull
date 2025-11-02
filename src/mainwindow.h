@@ -12,7 +12,8 @@ public:
 private:
   Ui::MainWindow *ui;
 
-  QString m_vault_path;
+  std::string m_vault_path;
 
   void reload_vault();
+  void preview_file(const std::string &filename);
 };
