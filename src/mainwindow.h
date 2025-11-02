@@ -11,4 +11,8 @@ public:
 
 private:
   Ui::MainWindow *ui;
+
+  QString m_vault_path;
+
+  void reload_vault();
 };
