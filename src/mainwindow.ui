@@ -11,12 +11,15 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>dull</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout">
     <item>
      <widget class="QTreeWidget" name="fsTreeWidget">
+      <property name="contextMenuPolicy">
+       <enum>Qt::ContextMenuPolicy::CustomContextMenu</enum>
+      </property>
       <column>
        <property name="text">
         <string>Name</string>
@@ -25,8 +28,7 @@
      </widget>
     </item>
     <item>
-     <widget class="QTextBrowser" name="filePreview">
-     </widget>
+     <widget class="QTextBrowser" name="filePreview"/>
     </item>
    </layout>
   </widget>
@@ -46,7 +48,15 @@
     <addaction name="actionNew"/>
     <addaction name="actionOpen"/>
    </widget>
+   <widget class="QMenu" name="menuFiles">
+    <property name="title">
+     <string>Files</string>
+    </property>
+    <addaction name="actionCreateFile"/>
+    <addaction name="actionAddFile"/>
+   </widget>
    <addaction name="menuFile"/>
+   <addaction name="menuFiles"/>
   </widget>
   <action name="actionNew">
    <property name="text">
@@ -56,6 +66,16 @@
   <action name="actionOpen">
    <property name="text">
     <string>Open</string>
+   </property>
+  </action>
+  <action name="actionAddFile">
+   <property name="text">
+    <string>Add</string>
+   </property>
+  </action>
+  <action name="actionCreateFile">
+   <property name="text">
+    <string>Create</string>
    </property>
   </action>
  </widget>

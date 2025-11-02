@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #define ASSERT(cond)                                                           \
   if (!(cond)) {                                                               \
@@ -20,3 +21,8 @@ static_assert(sizeof(float) * 8 == 32);
 using f32 = float;
 static_assert(sizeof(double) * 8 == 64);
 using f64 = double;
+
+inline std::string path_to_filename(const std::string &path) {
+  u64 pos = path.find_last_of("/\\");
+  return (pos == std::string::npos) ? path : path.substr(pos + 1);
+}

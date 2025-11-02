@@ -1,9 +1,8 @@
 #include "mainwindow.h"
-#include "vault.h"
-#include <QDebug>
 #include <QFileDialog>
-#include <QTreeWidgetItem>
-#include <fstream>
+#include <QInputDialog>
+#include <QTemporaryFile>
+#include <iostream>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow) {
@@ -17,16 +16,8 @@ MainWindow::MainWindow(QWidget *parent)
       return;
     }
 
-    {
-      std::ofstream file(path.toStdString(), std::ios::binary);
-      Vault::write_header(file);
-
-      Vault::write_file(file, "hello.txt", "Hello, World!");
-      Vault::write_file(file, "test.txt", "test test test");
-    }
-
-    m_vault_path = path.toStdString();
-    reload_vault();
+    m_vault = Vault(path.toStdString());
+    reload_fs_tree();
   });
 
   connect(ui->actionOpen, &QAction::triggered, this, [this]() {
@@ -37,52 +28,105 @@ MainWindow::MainWindow(QWidget *parent)
       return;
     }
 
-    m_vault_path = path.toStdString();
-    reload_vault();
+    m_vault = Vault(path.toStdString());
+    reload_fs_tree();
   });
 
   connect(ui->fsTreeWidget, &QTreeWidget::itemClicked,
           [this](QTreeWidgetItem *item, int column) {
             preview_file(item->text(column).toStdString());
           });
+
+  connect(ui->fsTreeWidget, &QTreeWidget::customContextMenuRequested, this,
+          &MainWindow::file_context_menu);
+
+  connect(ui->actionAddFile, &QAction::triggered, this, [this]() {
+    if (!m_vault) {
+      return;
+    }
+
+    QString path = QFileDialog::getOpenFileName(this, "Choose a file to add");
+    if (path.isEmpty()) {
+      return;
+    }
+
+    std::ifstream file(path.toStdString(), std::ios::binary);
+
+    std::string content((std::istreambuf_iterator<char>(file)),
+                        std::istreambuf_iterator<char>());
+
+    m_vault->write_file(path_to_filename(path.toStdString()), content);
+
+    reload_fs_tree();
+  });
+
+  connect(ui->actionCreateFile, &QAction::triggered, this, [this]() {
+    if (!m_vault) {
+      return;
+    }
+
+    QString path =
+        QInputDialog::getText(this, "Create File", "Where to create the file");
+    if (path.isEmpty()) {
+      return;
+    }
+
+    m_vault->write_file(path.toStdString(), "");
+
+    reload_fs_tree();
+  });
 }
 
-void MainWindow::reload_vault() {
+void MainWindow::reload_fs_tree() {
   ui->fsTreeWidget->clear();
 
-  std::ifstream file(m_vault_path, std::ios::binary);
-  Vault::verify_header(file);
-
-  while (true) {
-    auto header = Vault::read_file_header(file);
-    if (!header) {
-      break;
-    }
-    file.seekg(static_cast<i64>(header->size), std::ios::cur);
-
+  auto headers = m_vault->read_file_headers();
+  for (const auto &header : headers) {
     auto *item = new QTreeWidgetItem(ui->fsTreeWidget);
-    item->setText(0, QString::fromStdString(header->name));
+    item->setText(0, QString::fromStdString(header.name));
   }
 }
 
 void MainWindow::preview_file(const std::string &filename) {
-  std::ifstream file(m_vault_path, std::ios::binary);
-  Vault::verify_header(file);
+  auto content = m_vault->read_file(filename);
+  if (content) {
+    ui->filePreview->setText(QString::fromStdString(content.value()));
+  } else {
+    qWarning() << "File to preview not found";
+  }
+}
 
-  while (true) {
-    auto header = Vault::read_file_header(file);
-    if (!header) {
-      break;
+void MainWindow::edit_file(const std::string &filename) {
+  auto content = m_vault->read_file(filename);
+  if (content) {
+    QTemporaryFile temp_file;
+    ASSERT(temp_file.open());
+    {
+      QTextStream out(&temp_file);
+      out << QString::fromStdString(content.value());
     }
+    temp_file.flush();
 
-    if (header->name == filename) {
-      std::string content(header->size, '\0');
-      file.read(content.data(), static_cast<i64>(header->size));
-      ui->filePreview->setText(QString::fromStdString(content));
-      return;
-    }
-    file.seekg(static_cast<i64>(header->size), std::ios::cur);
+    // TODO: xdg-open or something
+    std::system(("kwrite " + temp_file.fileName()).toStdString().c_str());
+    // TODO: write back
+  } else {
+    qWarning() << "File to edit not found";
+  }
+}
+
+void MainWindow::file_context_menu(const QPoint &pos) {
+  QTreeWidgetItem *item = ui->fsTreeWidget->itemAt(pos);
+  if (item == nullptr) {
+    return;
   }
 
-  ASSERT(false);
+  QMenu menu(this);
+
+  QAction *edit_action = menu.addAction(
+      style()->standardIcon(QStyle::SP_FileDialogDetailedView), "Edit");
+  connect(edit_action, &QAction::triggered, this,
+          [this, item]() { edit_file(item->text(0).toStdString()); });
+
+  menu.exec(ui->fsTreeWidget->mapToGlobal(pos));
 }

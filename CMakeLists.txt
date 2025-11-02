@@ -12,7 +12,7 @@ set(CMAKE_AUTOUIC ON)
 
 qt6_wrap_ui(UI_HEADERS src/mainwindow.ui)
 
-add_executable(${PROJECT_NAME} src/main.cc src/mainwindow.cc ${UI_HEADERS})
+add_executable(${PROJECT_NAME} src/main.cc src/mainwindow.cc src/vault.cc ${UI_HEADERS})
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
