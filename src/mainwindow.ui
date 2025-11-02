@@ -13,28 +13,7 @@
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
-  <widget class="QWidget" name="centralwidget">
-   <widget class="QLabel" name="label">
-    <property name="geometry">
-     <rect>
-      <x>60</x>
-      <y>90</y>
-      <width>681</width>
-      <height>311</height>
-     </rect>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>72</pointsize>
-      <italic>true</italic>
-      <bold>true</bold>
-     </font>
-    </property>
-    <property name="text">
-     <string>Hello, World!</string>
-    </property>
-   </widget>
-  </widget>
+  <widget class="QWidget" name="centralwidget"/>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
@@ -44,7 +23,19 @@
      <height>30</height>
     </rect>
    </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>Vault</string>
+    </property>
+    <addaction name="actionNew"/>
+   </widget>
+   <addaction name="menuFile"/>
   </widget>
+  <action name="actionNew">
+   <property name="text">
+    <string>New</string>
+   </property>
+  </action>
  </widget>
  <resources/>
  <connections/>
