@@ -11,6 +11,10 @@ class MainWindow : public QMainWindow {
 public:
   explicit MainWindow(QWidget *parent = nullptr);
 
+protected:
+  void dragEnterEvent(QDragEnterEvent *event) override;
+  void dropEvent(QDropEvent *event) override;
+
 private:
   std::unique_ptr<Ui::MainWindow> ui;
 

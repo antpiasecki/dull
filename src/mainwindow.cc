@@ -1,8 +1,11 @@
 #include "mainwindow.h"
 #include <QDesktopServices>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFileDialog>
 #include <QInputDialog>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QTemporaryDir>
 #include <botan/auto_rng.h>
 #include <botan/hex.h>
@@ -10,6 +13,8 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(std::make_unique<Ui::MainWindow>()) {
   ui->setupUi(this);
+
+  setAcceptDrops(true);
 
   ui->filePreview->setVisible(false);
 
@@ -200,4 +205,44 @@ void MainWindow::file_context_menu(const QPoint &pos) {
   });
 
   menu.exec(ui->fsTreeWidget->mapToGlobal(pos));
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent *event) {
+  if (event->mimeData()->hasUrls()) {
+    const auto urls = event->mimeData()->urls();
+    for (const QUrl &u : urls) {
+      if (u.isLocalFile()) {
+        event->acceptProposedAction();
+        return;
+      }
+    }
+  }
+  event->ignore();
+}
+
+void MainWindow::dropEvent(QDropEvent *event) {
+  if (!event->mimeData()->hasUrls()) {
+    event->ignore();
+    return;
+  }
+  if (!m_vault) {
+    return;
+  }
+
+  for (const QUrl &u : event->mimeData()->urls()) {
+    if (!u.isLocalFile()) {
+      continue;
+    }
+    std::ifstream file(u.toLocalFile().toStdString(), std::ios::binary);
+    ASSERT(file.good());
+
+    std::string content((std::istreambuf_iterator<char>(file)),
+                        std::istreambuf_iterator<char>());
+
+    m_vault->create_file(path_to_filename(u.toLocalFile().toStdString()),
+                         content);
+  }
+  reload_fs_tree();
+
+  event->acceptProposedAction();
 }
