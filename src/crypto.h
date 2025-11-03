@@ -8,12 +8,9 @@
 
 namespace Crypto {
 
-static Botan::AutoSeeded_RNG g_rng; // NOLINT
-
-const Botan::secure_vector<u8> KEY = {
-    0xaa, 0x1b, 0x6c, 0xd2, 0x8e, 0x54, 0x9d, 0xdb, 0xe8, 0xd6, 0x9e,
-    0xe9, 0xa4, 0x19, 0xa4, 0xc1, 0x2,  0x73, 0x58, 0x82, 0xa3, 0x75,
-    0x5f, 0x86, 0xbd, 0x0,  0x92, 0x97, 0x1e, 0xf3, 0x27, 0x5d};
+// TODO: random salt per per-vault
+const std::vector<u8> SALT = {0xab, 0xfb, 0x45, 0x1,  0x62, 0xcf, 0xd7, 0x46,
+                              0xdf, 0xaf, 0x4e, 0xa9, 0xf0, 0x4b, 0x9f, 0x38};
 
 inline Botan::secure_vector<u8>
 encrypt_xchacha20_poly1305(const Botan::secure_vector<u8> &plaintext,
@@ -59,7 +56,7 @@ decrypt_xchacha20_poly1305(const Botan::secure_vector<u8> &ciphertext,
 inline Botan::secure_vector<u8>
 derive_key_argon2id(const std::string &password, const std::vector<u8> &salt) {
   auto pwdhash = Botan::PasswordHashFamily::create_or_throw("Argon2id")
-                     ->from_params(static_cast<u64>(1024 * 1024), 6, 4);
+                     ->from_params(static_cast<u64>(1024 * 1024), 8, 4);
 
   Botan::secure_vector<u8> key(32);
   pwdhash->derive_key(key.data(), key.size(), password.data(), password.size(),

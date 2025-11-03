@@ -4,11 +4,12 @@
 #include <array>
 #include <filesystem>
 
-Vault::Vault(std::string path) : m_path(std::move(path)) {
+Vault::Vault(std::string path, const std::string &password)
+    : m_path(std::move(path)) {
   m_file.open(m_path, std::ios::in | std::ios::out | std::ios::binary);
-  ASSERT(m_file.is_open());
-
   ASSERT(m_file.good());
+
+  m_key = Crypto::derive_key_argon2id(password, Crypto::SALT);
 
   std::array<char, 4> header{};
   ASSERT(static_cast<bool>(m_file.read(header.data(), header.size())));
@@ -56,8 +57,8 @@ std::optional<std::string> Vault::read_file(const std::string &filename) {
         break;
       }
 
-      auto plaintext = Crypto::decrypt_xchacha20_poly1305(
-          ciphertext, Crypto::KEY, header->nonce);
+      auto plaintext =
+          Crypto::decrypt_xchacha20_poly1305(ciphertext, m_key, header->nonce);
       return std::string(to_char_ptr(plaintext.data()), plaintext.size());
     }
 
@@ -76,12 +77,14 @@ void Vault::create_file(const std::string &filename,
 
   Botan::secure_vector<u8> plaintext(content.begin(), content.end());
 
-  auto nonce_sv = Crypto::g_rng.random_vec(24);
+  Botan::AutoSeeded_RNG rng;
+  auto nonce_sv = rng.random_vec(24);
   std::vector<u8> nonce(nonce_sv.begin(), nonce_sv.end());
 
-  auto ciphertext =
-      Crypto::encrypt_xchacha20_poly1305(plaintext, Crypto::KEY, nonce);
+  auto ciphertext = Crypto::encrypt_xchacha20_poly1305(plaintext, m_key, nonce);
   u64 ciphertext_size = ciphertext.size();
+
+  // TODO: encrypt filenames as well
 
   ASSERT(m_file.write(to_char_ptr(&filename_size), sizeof(u64)));
   ASSERT(m_file.write(filename.data(), static_cast<i64>(filename_size)));

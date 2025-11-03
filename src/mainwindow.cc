@@ -20,12 +20,21 @@ MainWindow::MainWindow(QWidget *parent)
       return;
     }
 
+    QString password = QInputDialog::getText(
+        this, "Choose a password", "Choose a password", QLineEdit::Password);
+    if (password.length() < 5) {
+      QMessageBox::critical(this, "Error",
+                            "Password must be at least 5 characters long.");
+      return;
+    }
+
     std::ofstream create(path.toStdString(), std::ios::binary);
     create.write("DULL", 4);
     create.write(to_char_ptr(&VERSION), sizeof(VERSION));
     create.close();
 
-    m_vault = std::make_unique<Vault>(path.toStdString());
+    m_vault =
+        std::make_unique<Vault>(path.toStdString(), password.toStdString());
     reload_fs_tree();
   });
 
@@ -37,7 +46,18 @@ MainWindow::MainWindow(QWidget *parent)
       return;
     }
 
-    m_vault = std::make_unique<Vault>(path.toStdString());
+    QString password = QInputDialog::getText(
+        this, "Unlock the vault", "Enter vault password", QLineEdit::Password);
+    if (password.length() < 5) {
+      QMessageBox::critical(this, "Error",
+                            "Password must be at least 5 characters long.");
+      return;
+    }
+
+    // TODO: check if password valid
+
+    m_vault =
+        std::make_unique<Vault>(path.toStdString(), password.toStdString());
     reload_fs_tree();
   });
 

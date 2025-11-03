@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.h"
+#include <botan/secmem.h>
 #include <fstream>
 #include <optional>
 #include <vector>
@@ -17,7 +18,7 @@ struct FileHeader {
 
 class Vault {
 public:
-  explicit Vault(std::string path);
+  explicit Vault(std::string path, const std::string &password);
 
   std::vector<FileHeader> read_file_headers();
   std::optional<std::string> read_file(const std::string &name);
@@ -30,4 +31,5 @@ public:
 private:
   std::string m_path;
   std::fstream m_file;
+  Botan::secure_vector<u8> m_key;
 };
