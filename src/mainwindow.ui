@@ -38,6 +38,11 @@
         <string>Offset</string>
        </property>
       </column>
+      <column>
+       <property name="text">
+        <string>Nonce</string>
+       </property>
+      </column>
      </widget>
     </item>
     <item>

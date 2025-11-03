@@ -4,6 +4,7 @@
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QTemporaryFile>
+#include <botan/hex.h>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(std::make_unique<Ui::MainWindow>()) {
@@ -18,6 +19,11 @@ MainWindow::MainWindow(QWidget *parent)
     if (path.isEmpty()) {
       return;
     }
+
+    std::ofstream create(path.toStdString(), std::ios::binary);
+    create.write("DULL", 4);
+    create.write(to_char_ptr(&VERSION), sizeof(VERSION));
+    create.close();
 
     m_vault = std::make_unique<Vault>(path.toStdString());
     reload_fs_tree();
@@ -37,7 +43,7 @@ MainWindow::MainWindow(QWidget *parent)
 
   connect(
       ui->fsTreeWidget, &QTreeWidget::itemClicked,
-      [this](QTreeWidgetItem *, int) { ui->filePreview->setVisible(false); });
+      [this](QTreeWidgetItem *, i32) { ui->filePreview->setVisible(false); });
 
   connect(ui->fsTreeWidget, &QTreeWidget::customContextMenuRequested, this,
           &MainWindow::file_context_menu);
@@ -72,6 +78,7 @@ void MainWindow::reload_fs_tree() {
     item->setText(0, QString::fromStdString(header.name));
     item->setText(1, QString::number(header.size));
     item->setText(2, QString::number(header.offset));
+    item->setText(3, QString::fromStdString(Botan::hex_encode(header.nonce)));
   }
   ui->fsTreeWidget->resizeColumnToContents(0);
 }

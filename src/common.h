@@ -30,3 +30,11 @@ inline std::string path_to_filename(const std::string &path) {
   u64 pos = path.find_last_of("/\\");
   return (pos == std::string::npos) ? path : path.substr(pos + 1);
 }
+
+template <typename T> constexpr char *to_char_ptr(T *ptr) noexcept {
+  return reinterpret_cast<char *>(ptr);
+}
+
+template <typename T> constexpr const char *to_char_ptr(const T *ptr) noexcept {
+  return reinterpret_cast<const char *>(ptr);
+}

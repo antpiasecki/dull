@@ -11,6 +11,7 @@ constexpr u64 AFTER_HEADER_OFFSET = 6;
 struct FileHeader {
   std::string name;
   u64 size;
+  std::vector<u8> nonce;
   u64 offset;
 };
 

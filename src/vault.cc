@@ -1,17 +1,12 @@
 #include "vault.h"
 #include "common.h"
+#include "crypto.h"
 #include <array>
 #include <filesystem>
 
 Vault::Vault(std::string path) : m_path(std::move(path)) {
   m_file.open(m_path, std::ios::in | std::ios::out | std::ios::binary);
-  if (!m_file.is_open()) {
-    std::ofstream create(m_path, std::ios::binary);
-    create.write("DULL", 4);
-    create.write(reinterpret_cast<const char *>(&VERSION), sizeof(VERSION));
-    create.close();
-    m_file.open(m_path, std::ios::in | std::ios::out | std::ios::binary);
-  }
+  ASSERT(m_file.is_open());
 
   ASSERT(m_file.good());
 
@@ -20,7 +15,7 @@ Vault::Vault(std::string path) : m_path(std::move(path)) {
   ASSERT(std::string_view(header.data(), header.size()) == "DULL");
 
   i16 version = 0;
-  ASSERT(m_file.read(reinterpret_cast<char *>(&version), sizeof(version)));
+  ASSERT(m_file.read(to_char_ptr(&version), sizeof(version)));
   ASSERT(version == VERSION);
 }
 
@@ -54,11 +49,16 @@ std::optional<std::string> Vault::read_file(const std::string &filename) {
     }
 
     if (header->name == filename) {
-      std::string content(header->size, '\0');
-      if (!m_file.read(content.data(), static_cast<i64>(header->size))) {
+      Botan::secure_vector<u8> ciphertext;
+      ciphertext.resize(header->size);
+      if (!m_file.read(to_char_ptr(ciphertext.data()),
+                       static_cast<i64>(header->size))) {
         break;
       }
-      return content;
+
+      auto plaintext = Crypto::decrypt_xchacha20_poly1305(
+          ciphertext, Crypto::KEY, header->nonce);
+      return std::string(to_char_ptr(plaintext.data()), plaintext.size());
     }
 
     m_file.seekg(static_cast<i64>(header->size), std::ios::cur);
@@ -73,13 +73,22 @@ void Vault::create_file(const std::string &filename,
   m_file.seekp(0, std::ios::end);
 
   u64 filename_size = filename.size();
-  u64 content_size = content.size();
-  ASSERT(m_file.write(reinterpret_cast<const char *>(&filename_size),
-                      sizeof(u64)));
+
+  Botan::secure_vector<u8> plaintext(content.begin(), content.end());
+
+  auto nonce_sv = Crypto::g_rng.random_vec(24);
+  std::vector<u8> nonce(nonce_sv.begin(), nonce_sv.end());
+
+  auto ciphertext =
+      Crypto::encrypt_xchacha20_poly1305(plaintext, Crypto::KEY, nonce);
+  u64 ciphertext_size = ciphertext.size();
+
+  ASSERT(m_file.write(to_char_ptr(&filename_size), sizeof(u64)));
   ASSERT(m_file.write(filename.data(), static_cast<i64>(filename_size)));
-  ASSERT(
-      m_file.write(reinterpret_cast<const char *>(&content_size), sizeof(u64)));
-  ASSERT(m_file.write(content.data(), static_cast<i64>(content_size)));
+  ASSERT(m_file.write(to_char_ptr(nonce.data()), nonce.size()));
+  ASSERT(m_file.write(to_char_ptr(&ciphertext_size), sizeof(u64)));
+  ASSERT(m_file.write(to_char_ptr(ciphertext.data()),
+                      static_cast<i64>(ciphertext_size)));
   m_file.flush();
 }
 
@@ -101,7 +110,7 @@ void Vault::delete_file(const std::string &filename) {
     if (header->name == filename) {
       entry_start = current_pos;
       entry_total_size =
-          sizeof(u64) + header->name.length() + sizeof(u64) + header->size;
+          sizeof(u64) + header->name.length() + 24 + sizeof(u64) + header->size;
       m_file.seekg(static_cast<i64>(header->size), std::ios::cur);
       break;
     }
@@ -144,7 +153,7 @@ std::optional<FileHeader> Vault::read_file_header(std::fstream &file) {
   header.offset = file.tellg();
 
   u64 name_size = 0;
-  if (!file.read(reinterpret_cast<char *>(&name_size), sizeof(u64))) {
+  if (!file.read(to_char_ptr(&name_size), sizeof(u64))) {
     return std::nullopt;
   }
 
@@ -155,7 +164,12 @@ std::optional<FileHeader> Vault::read_file_header(std::fstream &file) {
     return std::nullopt;
   }
 
-  if (!file.read(reinterpret_cast<char *>(&header.size), sizeof(u64))) {
+  header.nonce.resize(24);
+  if (!file.read(to_char_ptr(header.nonce.data()), 24)) {
+    return std::nullopt;
+  }
+
+  if (!file.read(to_char_ptr(&header.size), sizeof(u64))) {
     return std::nullopt;
   }
   return header;
