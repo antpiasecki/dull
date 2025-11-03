@@ -32,10 +32,10 @@ std::vector<FileHeader> Vault::read_file_headers() {
   m_file.seekg(AFTER_HEADER_OFFSET, std::ios::beg);
 
   while (true) {
-    auto header = read_file_header(m_file);
+    auto header = read_file_header();
     if (header) {
       headers.push_back(header.value());
-      m_file.seekg(static_cast<i64>(header->size), std::ios::cur);
+      m_file.seekg(static_cast<i64>(header->content_size), std::ios::cur);
     } else {
       break;
     }
@@ -49,16 +49,16 @@ std::optional<std::string> Vault::read_file(const std::string &filename) {
   m_file.seekg(AFTER_HEADER_OFFSET, std::ios::beg);
 
   while (true) {
-    auto header = read_file_header(m_file);
+    auto header = read_file_header();
     if (!header) {
       break;
     }
 
     if (header->name == filename) {
       Botan::secure_vector<u8> ciphertext;
-      ciphertext.resize(header->size);
+      ciphertext.resize(header->content_size);
       if (!m_file.read(to_char_ptr(ciphertext.data()),
-                       static_cast<i64>(header->size))) {
+                       static_cast<i64>(header->content_size))) {
         break;
       }
 
@@ -67,7 +67,7 @@ std::optional<std::string> Vault::read_file(const std::string &filename) {
       return std::string(to_char_ptr(plaintext.data()), plaintext.size());
     }
 
-    m_file.seekg(static_cast<i64>(header->size), std::ios::cur);
+    m_file.seekg(static_cast<i64>(header->content_size), std::ios::cur);
   }
 
   return std::nullopt;
@@ -78,22 +78,24 @@ void Vault::create_file(const std::string &filename,
   m_file.clear();
   m_file.seekp(0, std::ios::end);
 
-  u64 filename_size = filename.size();
-
-  Botan::secure_vector<u8> plaintext(content.begin(), content.end());
-
   static Botan::AutoSeeded_RNG rng;
   auto nonce_sv = rng.random_vec(24);
   std::vector<u8> nonce(nonce_sv.begin(), nonce_sv.end());
 
-  auto ciphertext = Crypto::encrypt_xchacha20_poly1305(plaintext, m_key, nonce);
+  Botan::secure_vector<u8> filename_sv(filename.begin(), filename.end());
+  auto filename_ciphertext =
+      Crypto::encrypt_xchacha20_poly1305(filename_sv, m_key, nonce);
+  u64 filename_ciphertext_size = filename_ciphertext.size();
+
+  Botan::secure_vector<u8> content_sv(content.begin(), content.end());
+  auto ciphertext =
+      Crypto::encrypt_xchacha20_poly1305(content_sv, m_key, nonce);
   u64 ciphertext_size = ciphertext.size();
 
-  // TODO: encrypt filenames as well
-
-  ASSERT(m_file.write(to_char_ptr(&filename_size), sizeof(u64)));
-  ASSERT(m_file.write(filename.data(), static_cast<i64>(filename_size)));
   ASSERT(m_file.write(to_char_ptr(nonce.data()), nonce.size()));
+  ASSERT(m_file.write(to_char_ptr(&filename_ciphertext_size), sizeof(u64)));
+  ASSERT(m_file.write(to_char_ptr(filename_ciphertext.data()),
+                      static_cast<i64>(filename_ciphertext_size)));
   ASSERT(m_file.write(to_char_ptr(&ciphertext_size), sizeof(u64)));
   ASSERT(m_file.write(to_char_ptr(ciphertext.data()),
                       static_cast<i64>(ciphertext_size)));
@@ -110,20 +112,20 @@ void Vault::delete_file(const std::string &filename) {
   while (true) {
     i64 current_pos = m_file.tellg();
 
-    auto header = read_file_header(m_file);
+    auto header = read_file_header();
     if (!header) {
       break;
     }
 
     if (header->name == filename) {
       entry_start = current_pos;
-      entry_total_size =
-          sizeof(u64) + header->name.length() + 24 + sizeof(u64) + header->size;
-      m_file.seekg(static_cast<i64>(header->size), std::ios::cur);
+      entry_total_size = 24 + sizeof(u64) + header->name_ciphertext_size +
+                         sizeof(u64) + header->content_size;
+      m_file.seekg(static_cast<i64>(header->content_size), std::ios::cur);
       break;
     }
 
-    m_file.seekg(static_cast<i64>(header->size), std::ios::cur);
+    m_file.seekg(static_cast<i64>(header->content_size), std::ios::cur);
   }
 
   if (entry_start != -1) {
@@ -156,28 +158,33 @@ void Vault::update_file(const std::string &filename,
   create_file(filename, content);
 }
 
-std::optional<FileHeader> Vault::read_file_header(std::fstream &file) {
+std::optional<FileHeader> Vault::read_file_header() {
   FileHeader header{};
-  header.offset = file.tellg();
-
-  u64 name_size = 0;
-  if (!file.read(to_char_ptr(&name_size), sizeof(u64))) {
-    return std::nullopt;
-  }
-
-  ASSERT(name_size < 10000);
-
-  header.name.resize(name_size);
-  if (!file.read(header.name.data(), static_cast<i64>(name_size))) {
-    return std::nullopt;
-  }
+  header.global_offset = m_file.tellg();
 
   header.nonce.resize(24);
-  if (!file.read(to_char_ptr(header.nonce.data()), 24)) {
+  if (!m_file.read(to_char_ptr(header.nonce.data()), 24)) {
     return std::nullopt;
   }
 
-  if (!file.read(to_char_ptr(&header.size), sizeof(u64))) {
+  if (!m_file.read(to_char_ptr(&header.name_ciphertext_size), sizeof(u64))) {
+    return std::nullopt;
+  }
+
+  ASSERT(header.name_ciphertext_size < 10000);
+
+  Botan::secure_vector<u8> name_ciphertext;
+  name_ciphertext.resize(header.name_ciphertext_size);
+  if (!m_file.read(to_char_ptr(name_ciphertext.data()),
+                   static_cast<i64>(header.name_ciphertext_size))) {
+    return std::nullopt;
+  }
+
+  auto name =
+      Crypto::decrypt_xchacha20_poly1305(name_ciphertext, m_key, header.nonce);
+  header.name = std::string(name.begin(), name.end());
+
+  if (!m_file.read(to_char_ptr(&header.content_size), sizeof(u64))) {
     return std::nullopt;
   }
   return header;

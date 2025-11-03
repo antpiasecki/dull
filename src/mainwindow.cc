@@ -3,7 +3,7 @@
 #include <QFileDialog>
 #include <QInputDialog>
 #include <QMessageBox>
-#include <QTemporaryFile>
+#include <QTemporaryDir>
 #include <botan/auto_rng.h>
 #include <botan/hex.h>
 
@@ -97,8 +97,8 @@ void MainWindow::reload_fs_tree() {
   for (const auto &header : headers) {
     auto *item = new QTreeWidgetItem(ui->fsTreeWidget);
     item->setText(0, QString::fromStdString(header.name));
-    item->setText(1, QString::number(header.size));
-    item->setText(2, QString::number(header.offset));
+    item->setText(1, QString::number(header.content_size));
+    item->setText(2, QString::number(header.global_offset));
     item->setText(3, QString::fromStdString(Botan::hex_encode(header.nonce)));
   }
   for (int i = 0; i < ui->fsTreeWidget->columnCount(); ++i) {
@@ -120,25 +120,29 @@ void MainWindow::preview_file(const std::string &filename) {
 void MainWindow::edit_file(const std::string &filename) {
   auto content = m_vault->read_file(filename);
   if (content) {
-    QTemporaryFile temp_file;
-    ASSERT(temp_file.open());
-    {
-      QTextStream out(&temp_file);
-      out << QString::fromStdString(content.value());
-    }
-    temp_file.flush();
+    QTemporaryDir dir;
+    ASSERT(dir.isValid());
 
-    QDesktopServices::openUrl(QUrl::fromLocalFile(temp_file.fileName()));
+    std::string path = dir.path().toStdString() + "/" + filename;
+
+    std::ofstream file(path);
+    file.write(content->data(), static_cast<i64>(content->size()));
+    file.close();
+
+    QDesktopServices::openUrl(
+        QUrl::fromLocalFile(QString::fromStdString(path)));
     QMessageBox::information(this, "Edit",
                              "Please edit the file in the opened editor and "
                              "save it. Click OK when done.");
 
-    temp_file.seek(0);
-    QTextStream in(&temp_file);
-    m_vault->update_file(filename, in.readAll().toStdString());
+    std::ifstream file2(path, std::ios::binary);
+    std::string new_content((std::istreambuf_iterator<char>(file2)),
+                            std::istreambuf_iterator<char>());
+
+    m_vault->update_file(filename, new_content);
     reload_fs_tree();
 
-    // QTemporaryFile gets deleted when it goes out of scope
+    // QTemporaryDir gets deleted when it goes out of scope
   } else {
     qWarning() << "File to edit not found";
   }

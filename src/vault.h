@@ -11,9 +11,10 @@ constexpr u64 AFTER_HEADER_OFFSET = 22;
 
 struct FileHeader {
   std::string name;
-  u64 size;
+  u64 name_ciphertext_size;
+  u64 content_size;
   std::vector<u8> nonce;
-  u64 offset;
+  u64 global_offset;
 };
 
 class Vault {
@@ -26,10 +27,10 @@ public:
   void delete_file(const std::string &name);
   void update_file(const std::string &name, const std::string &content);
 
-  static std::optional<FileHeader> read_file_header(std::fstream &file);
-
 private:
   std::string m_path;
   std::fstream m_file;
   Botan::secure_vector<u8> m_key;
+
+  std::optional<FileHeader> read_file_header();
 };
