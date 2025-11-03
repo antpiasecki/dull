@@ -4,6 +4,7 @@
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QTemporaryFile>
+#include <botan/auto_rng.h>
 #include <botan/hex.h>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -22,15 +23,20 @@ MainWindow::MainWindow(QWidget *parent)
 
     QString password = QInputDialog::getText(
         this, "Choose a password", "Choose a password", QLineEdit::Password);
-    if (password.length() < 5) {
+    if (password.length() < 8) {
       QMessageBox::critical(this, "Error",
-                            "Password must be at least 5 characters long.");
+                            "Password must be at least 8 characters long.");
       return;
     }
+
+    static Botan::AutoSeeded_RNG rng;
+    auto salt_sv = rng.random_vec(16);
+    std::vector<u8> salt(salt_sv.begin(), salt_sv.end());
 
     std::ofstream create(path.toStdString(), std::ios::binary);
     create.write("DULL", 4);
     create.write(to_char_ptr(&VERSION), sizeof(VERSION));
+    create.write(to_char_ptr(salt.data()), 16);
     create.close();
 
     m_vault =
@@ -48,11 +54,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     QString password = QInputDialog::getText(
         this, "Unlock the vault", "Enter vault password", QLineEdit::Password);
-    if (password.length() < 5) {
-      QMessageBox::critical(this, "Error",
-                            "Password must be at least 5 characters long.");
-      return;
-    }
 
     // TODO: check if password valid
 
@@ -100,7 +101,9 @@ void MainWindow::reload_fs_tree() {
     item->setText(2, QString::number(header.offset));
     item->setText(3, QString::fromStdString(Botan::hex_encode(header.nonce)));
   }
-  ui->fsTreeWidget->resizeColumnToContents(0);
+  for (int i = 0; i < ui->fsTreeWidget->columnCount(); ++i) {
+    ui->fsTreeWidget->resizeColumnToContents(i);
+  }
 }
 
 void MainWindow::preview_file(const std::string &filename) {
@@ -158,6 +161,13 @@ void MainWindow::file_context_menu(const QPoint &pos) {
       style()->standardIcon(QStyle::SP_FileDialogDetailedView), "Edit");
   connect(edit_action, &QAction::triggered, this,
           [this, item]() { edit_file(item->text(0).toStdString()); });
+
+  QAction *delete_action = menu.addAction(
+      style()->standardIcon(QStyle::SP_DialogCancelButton), "Delete");
+  connect(delete_action, &QAction::triggered, this, [this, item]() {
+    m_vault->delete_file(item->text(0).toStdString());
+    reload_fs_tree();
+  });
 
   menu.exec(ui->fsTreeWidget->mapToGlobal(pos));
 }

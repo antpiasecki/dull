@@ -2,6 +2,7 @@
 #include "common.h"
 #include "crypto.h"
 #include <array>
+#include <botan/auto_rng.h>
 #include <filesystem>
 
 Vault::Vault(std::string path, const std::string &password)
@@ -9,15 +10,19 @@ Vault::Vault(std::string path, const std::string &password)
   m_file.open(m_path, std::ios::in | std::ios::out | std::ios::binary);
   ASSERT(m_file.good());
 
-  m_key = Crypto::derive_key_argon2id(password, Crypto::SALT);
-
-  std::array<char, 4> header{};
-  ASSERT(static_cast<bool>(m_file.read(header.data(), header.size())));
-  ASSERT(std::string_view(header.data(), header.size()) == "DULL");
+  std::array<char, 4> magic{};
+  ASSERT(m_file.read(magic.data(), 4));
+  ASSERT(std::string_view(magic.data(), magic.size()) == "DULL");
 
   i16 version = 0;
   ASSERT(m_file.read(to_char_ptr(&version), sizeof(version)));
   ASSERT(version == VERSION);
+
+  std::vector<u8> salt{};
+  salt.resize(16);
+  ASSERT(m_file.read(to_char_ptr(salt.data()), 16));
+
+  m_key = Crypto::derive_key_argon2id(password, salt);
 }
 
 std::vector<FileHeader> Vault::read_file_headers() {
@@ -77,7 +82,7 @@ void Vault::create_file(const std::string &filename,
 
   Botan::secure_vector<u8> plaintext(content.begin(), content.end());
 
-  Botan::AutoSeeded_RNG rng;
+  static Botan::AutoSeeded_RNG rng;
   auto nonce_sv = rng.random_vec(24);
   std::vector<u8> nonce(nonce_sv.begin(), nonce_sv.end());
 

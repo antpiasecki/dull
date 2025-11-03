@@ -7,7 +7,7 @@
 #include <vector>
 
 constexpr i16 VERSION = 1;
-constexpr u64 AFTER_HEADER_OFFSET = 6;
+constexpr u64 AFTER_HEADER_OFFSET = 22;
 
 struct FileHeader {
   std::string name;
