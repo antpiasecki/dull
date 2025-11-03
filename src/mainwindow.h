@@ -18,6 +18,7 @@ private:
 
   void reload_fs_tree();
   void preview_file(const std::string &filename);
+  void extract_file(const std::string &filename);
   void edit_file(const std::string &filename);
   void file_context_menu(const QPoint &pos);
 };

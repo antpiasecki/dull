@@ -21,6 +21,10 @@ MainWindow::MainWindow(QWidget *parent)
       return;
     }
 
+    if (!path.contains(".dull")) {
+      path += ".dull";
+    }
+
     QString password = QInputDialog::getText(
         this, "Choose a password", "Choose a password", QLineEdit::Password);
     if (password.length() < 8) {
@@ -117,6 +121,23 @@ void MainWindow::preview_file(const std::string &filename) {
   }
 }
 
+void MainWindow::extract_file(const std::string &filename) {
+  auto content = m_vault->read_file(filename);
+  if (content) {
+    QString path = QFileDialog::getSaveFileName(
+        this, "Choose location to extract",
+        QDir::currentPath() + "/" + QString::fromStdString(filename));
+    if (path.isEmpty()) {
+      return;
+    }
+
+    std::ofstream file(path.toStdString(), std::ios::binary);
+    file.write(content->data(), static_cast<i64>(content->size()));
+  } else {
+    qWarning() << "File to extract not found";
+  }
+}
+
 void MainWindow::edit_file(const std::string &filename) {
   auto content = m_vault->read_file(filename);
   if (content) {
@@ -165,6 +186,11 @@ void MainWindow::file_context_menu(const QPoint &pos) {
       style()->standardIcon(QStyle::SP_FileDialogDetailedView), "Edit");
   connect(edit_action, &QAction::triggered, this,
           [this, item]() { edit_file(item->text(0).toStdString()); });
+
+  QAction *extract_action =
+      menu.addAction(style()->standardIcon(QStyle::SP_DriveHDIcon), "Extract");
+  connect(extract_action, &QAction::triggered, this,
+          [this, item]() { extract_file(item->text(0).toStdString()); });
 
   QAction *delete_action = menu.addAction(
       style()->standardIcon(QStyle::SP_DialogCancelButton), "Delete");
