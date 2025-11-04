@@ -21,3 +21,5 @@ add_executable(${PROJECT_NAME} src/main.cc src/mainwindow.cc src/vault.cc ${UI_H
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${BOTAN_INCLUDE_DIRS})
 
 target_link_libraries(${PROJECT_NAME} Qt6::Core Qt6::Widgets ${BOTAN_LIBRARIES})
+
+install(TARGETS ${PROJECT_NAME} DESTINATION bin)

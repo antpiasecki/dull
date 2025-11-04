@@ -19,6 +19,12 @@ cmake --build build -j $(nproc)
 ./build/dull
 ```
 
+### Arch
+```
+sudo pacman -S base-devel
+makepkg -si
+```
+
 ### Windows / MSYS2
 ```
 pacman -S --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja mingw-w64-x86_64-qt6-base mingw-w64-x86_64-qt6-tools mingw-w64-x86_64-libbotan
