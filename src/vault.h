@@ -1,19 +1,21 @@
 #pragma once
 
 #include "common.h"
+#include <array>
 #include <botan/secmem.h>
 #include <fstream>
 #include <optional>
-#include <vector>
 
 constexpr i16 VERSION = 1;
 constexpr u64 AFTER_HEADER_OFFSET = 22;
 
+// !!! REMEMBER TO UPDATE entry_total_size IN Vault::delete_file
 struct FileHeader {
-  std::string name;
+  std::array<u8, 24> name_nonce;
   u64 name_ciphertext_size;
-  u64 content_size;
-  std::vector<u8> content_nonce;
+  std::string name;
+  std::array<u8, 24> content_nonce;
+  u64 content_ciphertext_size;
 };
 
 class Vault {

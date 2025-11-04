@@ -106,7 +106,7 @@ void MainWindow::reload_fs_tree() {
   for (const auto &header : headers) {
     auto *item = new QTreeWidgetItem(ui->fsTreeWidget);
     item->setText(0, QString::fromStdString(header.name));
-    item->setText(1, QString::number(header.content_size));
+    item->setText(1, QString::number(header.content_ciphertext_size));
   }
   for (int i = 0; i < ui->fsTreeWidget->columnCount(); ++i) {
     ui->fsTreeWidget->resizeColumnToContents(i);

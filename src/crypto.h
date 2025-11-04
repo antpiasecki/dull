@@ -3,14 +3,13 @@
 #include <botan/aead.h>
 #include <botan/hex.h>
 #include <botan/pwdhash.h>
-#include <vector>
 
 namespace Crypto {
 
 inline Botan::secure_vector<u8>
 encrypt_xchacha20_poly1305(const Botan::secure_vector<u8> &plaintext,
                            const Botan::secure_vector<u8> &key,
-                           const std::vector<u8> &nonce) {
+                           const std::array<u8, 24> &nonce) {
   ASSERT(key.size() == 32);
   ASSERT(nonce.size() == 24);
 
@@ -31,7 +30,7 @@ encrypt_xchacha20_poly1305(const Botan::secure_vector<u8> &plaintext,
 inline Botan::secure_vector<u8>
 decrypt_xchacha20_poly1305(const Botan::secure_vector<u8> &ciphertext,
                            const Botan::secure_vector<u8> &key,
-                           const std::vector<u8> &nonce) {
+                           const std::array<u8, 24> &nonce) {
   ASSERT(ciphertext.size() >= 16);
   ASSERT(key.size() == 32);
   ASSERT(nonce.size() == 24);
@@ -49,7 +48,8 @@ decrypt_xchacha20_poly1305(const Botan::secure_vector<u8> &ciphertext,
 }
 
 inline Botan::secure_vector<u8>
-derive_key_argon2id(const std::string &password, const std::vector<u8> &salt) {
+derive_key_argon2id(const std::string &password,
+                    const std::array<u8, 16> &salt) {
   // thousands of years to crack a random 8 char password on a 100 GPUs
   auto pwdhash = Botan::PasswordHashFamily::create_or_throw("Argon2id")
                      ->from_params(static_cast<u64>(1024 * 1024), 8, 4);

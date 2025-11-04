@@ -18,8 +18,7 @@ Vault::Vault(std::string path, const std::string &password)
   ASSERT(m_file.read(to_char_ptr(&version), sizeof(version)));
   ASSERT(version == VERSION);
 
-  std::vector<u8> salt{};
-  salt.resize(16);
+  std::array<u8, 16> salt{};
   ASSERT(m_file.read(to_char_ptr(salt.data()), 16));
 
   m_key = Crypto::derive_key_argon2id(password, salt);
@@ -35,7 +34,8 @@ std::vector<FileHeader> Vault::read_file_headers() {
     auto header = read_file_header();
     if (header) {
       headers.push_back(header.value());
-      m_file.seekg(static_cast<i64>(header->content_size), std::ios::cur);
+      m_file.seekg(static_cast<i64>(header->content_ciphertext_size),
+                   std::ios::cur);
     } else {
       break;
     }
@@ -56,9 +56,9 @@ std::optional<std::string> Vault::read_file(const std::string &filename) {
 
     if (header->name == filename) {
       Botan::secure_vector<u8> ciphertext;
-      ciphertext.resize(header->content_size);
+      ciphertext.resize(header->content_ciphertext_size);
       if (!m_file.read(to_char_ptr(ciphertext.data()),
-                       static_cast<i64>(header->content_size))) {
+                       static_cast<i64>(header->content_ciphertext_size))) {
         break;
       }
 
@@ -67,7 +67,8 @@ std::optional<std::string> Vault::read_file(const std::string &filename) {
       return std::string(to_char_ptr(plaintext.data()), plaintext.size());
     }
 
-    m_file.seekg(static_cast<i64>(header->content_size), std::ios::cur);
+    m_file.seekg(static_cast<i64>(header->content_ciphertext_size),
+                 std::ios::cur);
   }
 
   return std::nullopt;
@@ -79,12 +80,8 @@ void Vault::create_file(const std::string &filename,
   m_file.seekp(0, std::ios::end);
 
   static Botan::AutoSeeded_RNG rng;
-  auto name_nonce_sv = rng.random_vec(24);
-  std::vector<u8> name_nonce(name_nonce_sv.begin(), name_nonce_sv.end());
-
-  auto content_nonce_sv = rng.random_vec(24);
-  std::vector<u8> content_nonce(content_nonce_sv.begin(),
-                                content_nonce_sv.end());
+  auto name_nonce = rng.random_array<24>();
+  auto content_nonce = rng.random_array<24>();
 
   Botan::secure_vector<u8> filename_sv(filename.begin(), filename.end());
   auto filename_ciphertext =
@@ -124,13 +121,15 @@ void Vault::delete_file(const std::string &filename) {
 
     if (header->name == filename) {
       entry_start = current_pos;
-      entry_total_size = 24 + sizeof(u64) + header->name_ciphertext_size +
-                         sizeof(u64) + header->content_size;
-      m_file.seekg(static_cast<i64>(header->content_size), std::ios::cur);
+      entry_total_size = 24 + sizeof(u64) + header->name_ciphertext_size + 24 +
+                         sizeof(u64) + header->content_ciphertext_size;
+      m_file.seekg(static_cast<i64>(header->content_ciphertext_size),
+                   std::ios::cur);
       break;
     }
 
-    m_file.seekg(static_cast<i64>(header->content_size), std::ios::cur);
+    m_file.seekg(static_cast<i64>(header->content_ciphertext_size),
+                 std::ios::cur);
   }
 
   if (entry_start != -1) {
@@ -166,9 +165,7 @@ void Vault::update_file(const std::string &filename,
 std::optional<FileHeader> Vault::read_file_header() {
   FileHeader header{};
 
-  std::vector<u8> name_nonce;
-  name_nonce.resize(24);
-  if (!m_file.read(to_char_ptr(name_nonce.data()), 24)) {
+  if (!m_file.read(to_char_ptr(header.name_nonce.data()), 24)) {
     return std::nullopt;
   }
 
@@ -185,16 +182,15 @@ std::optional<FileHeader> Vault::read_file_header() {
     return std::nullopt;
   }
 
-  auto name =
-      Crypto::decrypt_xchacha20_poly1305(name_ciphertext, m_key, name_nonce);
+  auto name = Crypto::decrypt_xchacha20_poly1305(name_ciphertext, m_key,
+                                                 header.name_nonce);
   header.name = std::string(name.begin(), name.end());
 
-  header.content_nonce.resize(24);
   if (!m_file.read(to_char_ptr(header.content_nonce.data()), 24)) {
     return std::nullopt;
   }
 
-  if (!m_file.read(to_char_ptr(&header.content_size), sizeof(u64))) {
+  if (!m_file.read(to_char_ptr(&header.content_ciphertext_size), sizeof(u64))) {
     return std::nullopt;
   }
   return header;
