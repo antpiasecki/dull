@@ -33,16 +33,6 @@
         <string>Size</string>
        </property>
       </column>
-      <column>
-       <property name="text">
-        <string>Offset</string>
-       </property>
-      </column>
-      <column>
-       <property name="text">
-        <string>Nonce</string>
-       </property>
-      </column>
      </widget>
     </item>
     <item>
@@ -91,11 +81,6 @@
   <action name="actionAddFiles">
    <property name="text">
     <string>Add</string>
-   </property>
-  </action>
-  <action name="actionCreateFile">
-   <property name="text">
-    <string>Create</string>
    </property>
   </action>
  </widget>

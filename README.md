@@ -5,7 +5,8 @@ Desktop app for securely storing sensitive files
 ## Features
 * **Pretty usable UI**
 * **Overkill encryption:** XChaCha20-Poly1305 + Argon2id(m=1GB,t=6,p=4) key derivation
-* **Cross-platform-ish:** Tested on Linux and Windows
+* **Cross-platform-ish:** Builds on Linux, Windows and macOS
+* **Drag and Drop support**
 
 ## Building
 

@@ -13,8 +13,7 @@ struct FileHeader {
   std::string name;
   u64 name_ciphertext_size;
   u64 content_size;
-  std::vector<u8> nonce;
-  u64 global_offset;
+  std::vector<u8> content_nonce;
 };
 
 class Vault {

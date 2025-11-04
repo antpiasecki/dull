@@ -62,8 +62,8 @@ std::optional<std::string> Vault::read_file(const std::string &filename) {
         break;
       }
 
-      auto plaintext =
-          Crypto::decrypt_xchacha20_poly1305(ciphertext, m_key, header->nonce);
+      auto plaintext = Crypto::decrypt_xchacha20_poly1305(
+          ciphertext, m_key, header->content_nonce);
       return std::string(to_char_ptr(plaintext.data()), plaintext.size());
     }
 
@@ -79,23 +79,28 @@ void Vault::create_file(const std::string &filename,
   m_file.seekp(0, std::ios::end);
 
   static Botan::AutoSeeded_RNG rng;
-  auto nonce_sv = rng.random_vec(24);
-  std::vector<u8> nonce(nonce_sv.begin(), nonce_sv.end());
+  auto name_nonce_sv = rng.random_vec(24);
+  std::vector<u8> name_nonce(name_nonce_sv.begin(), name_nonce_sv.end());
+
+  auto content_nonce_sv = rng.random_vec(24);
+  std::vector<u8> content_nonce(content_nonce_sv.begin(),
+                                content_nonce_sv.end());
 
   Botan::secure_vector<u8> filename_sv(filename.begin(), filename.end());
   auto filename_ciphertext =
-      Crypto::encrypt_xchacha20_poly1305(filename_sv, m_key, nonce);
+      Crypto::encrypt_xchacha20_poly1305(filename_sv, m_key, name_nonce);
   u64 filename_ciphertext_size = filename_ciphertext.size();
 
   Botan::secure_vector<u8> content_sv(content.begin(), content.end());
   auto ciphertext =
-      Crypto::encrypt_xchacha20_poly1305(content_sv, m_key, nonce);
+      Crypto::encrypt_xchacha20_poly1305(content_sv, m_key, content_nonce);
   u64 ciphertext_size = ciphertext.size();
 
-  ASSERT(m_file.write(to_char_ptr(nonce.data()), nonce.size()));
+  ASSERT(m_file.write(to_char_ptr(name_nonce.data()), name_nonce.size()));
   ASSERT(m_file.write(to_char_ptr(&filename_ciphertext_size), sizeof(u64)));
   ASSERT(m_file.write(to_char_ptr(filename_ciphertext.data()),
                       static_cast<i64>(filename_ciphertext_size)));
+  ASSERT(m_file.write(to_char_ptr(content_nonce.data()), content_nonce.size()));
   ASSERT(m_file.write(to_char_ptr(&ciphertext_size), sizeof(u64)));
   ASSERT(m_file.write(to_char_ptr(ciphertext.data()),
                       static_cast<i64>(ciphertext_size)));
@@ -160,10 +165,10 @@ void Vault::update_file(const std::string &filename,
 
 std::optional<FileHeader> Vault::read_file_header() {
   FileHeader header{};
-  header.global_offset = m_file.tellg();
 
-  header.nonce.resize(24);
-  if (!m_file.read(to_char_ptr(header.nonce.data()), 24)) {
+  std::vector<u8> name_nonce;
+  name_nonce.resize(24);
+  if (!m_file.read(to_char_ptr(name_nonce.data()), 24)) {
     return std::nullopt;
   }
 
@@ -181,8 +186,13 @@ std::optional<FileHeader> Vault::read_file_header() {
   }
 
   auto name =
-      Crypto::decrypt_xchacha20_poly1305(name_ciphertext, m_key, header.nonce);
+      Crypto::decrypt_xchacha20_poly1305(name_ciphertext, m_key, name_nonce);
   header.name = std::string(name.begin(), name.end());
+
+  header.content_nonce.resize(24);
+  if (!m_file.read(to_char_ptr(header.content_nonce.data()), 24)) {
+    return std::nullopt;
+  }
 
   if (!m_file.read(to_char_ptr(&header.content_size), sizeof(u64))) {
     return std::nullopt;
