@@ -1,3 +1,4 @@
+// TODO: actual fs
 #include "mainwindow.h"
 #include <QDesktopServices>
 #include <QDragEnterEvent>
@@ -38,6 +39,9 @@ MainWindow::MainWindow(QWidget *parent)
       return;
     }
 
+    ui->statusbar->showMessage("Creating the vault...");
+    QCoreApplication::processEvents();
+
     static Botan::AutoSeeded_RNG rng;
     auto salt_sv = rng.random_vec(16);
     std::vector<u8> salt(salt_sv.begin(), salt_sv.end());
@@ -51,6 +55,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_vault =
         std::make_unique<Vault>(path.toStdString(), password.toStdString());
     reload_fs_tree();
+
+    ui->statusbar->clearMessage();
   });
 
   connect(ui->actionOpen, &QAction::triggered, this, [this]() {
@@ -63,12 +69,20 @@ MainWindow::MainWindow(QWidget *parent)
 
     QString password = QInputDialog::getText(
         this, "Unlock the vault", "Enter vault password", QLineEdit::Password);
+    if (password.isEmpty()) {
+      return;
+    }
 
     // TODO: check if password valid
+
+    ui->statusbar->showMessage("Opening the vault...");
+    QCoreApplication::processEvents();
 
     m_vault =
         std::make_unique<Vault>(path.toStdString(), password.toStdString());
     reload_fs_tree();
+
+    ui->statusbar->clearMessage();
   });
 
   connect(
@@ -95,16 +109,20 @@ MainWindow::MainWindow(QWidget *parent)
     }
 
     reload_fs_tree();
+    ui->statusbar->showMessage("Added " + QString::number(paths.size()) +
+                               " files");
   });
 }
 
 void MainWindow::reload_fs_tree() {
+  setWindowTitle(QString::fromStdString(m_vault->path()) + " - dull");
   ui->menuFiles->setEnabled(true);
   ui->fsTreeWidget->clear();
 
   auto headers = m_vault->read_file_headers();
   for (const auto &header : headers) {
     auto *item = new QTreeWidgetItem(ui->fsTreeWidget);
+    item->setIcon(0, style()->standardIcon(QStyle::SP_FileIcon));
     item->setText(0, QString::fromStdString(header.name));
     item->setText(1, QString::number(header.content_ciphertext_size));
   }
@@ -136,6 +154,8 @@ void MainWindow::extract_file(const std::string &filename) {
 
     std::ofstream file(path.toStdString(), std::ios::binary);
     file.write(content->data(), static_cast<i64>(content->size()));
+
+    ui->statusbar->showMessage("Extracted to " + path);
   } else {
     qWarning() << "File to extract not found";
   }
@@ -166,6 +186,7 @@ void MainWindow::edit_file(const std::string &filename) {
     m_vault->update_file(filename, new_content);
     reload_fs_tree();
 
+    ui->statusbar->showMessage("File updated");
     // QTemporaryDir gets deleted when it goes out of scope
   } else {
     qWarning() << "File to edit not found";
@@ -240,6 +261,8 @@ void MainWindow::dropEvent(QDropEvent *event) {
     m_vault->create_file(path_to_filename(u.toLocalFile().toStdString()),
                          content);
   }
+  ui->statusbar->showMessage(
+      "Added " + QString::number(event->mimeData()->urls().size()) + " files");
   reload_fs_tree();
 
   event->acceptProposedAction();

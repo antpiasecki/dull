@@ -8,7 +8,7 @@ depends=('qt6-base' 'botan')
 makedepends=('cmake')
 source=("${url}/archive/refs/tags/${pkgver}.tar.gz")
 sha256sums=('SKIP')
-DEBUGPKG=()
+options=('!debug')
 
 build() {
   cd "${pkgname}-${pkgver}"

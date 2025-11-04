@@ -28,6 +28,8 @@ public:
   void delete_file(const std::string &name);
   void update_file(const std::string &name, const std::string &content);
 
+  const std::string &path() const { return m_path; }
+
 private:
   std::string m_path;
   std::fstream m_file;
