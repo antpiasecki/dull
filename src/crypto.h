@@ -1,7 +1,6 @@
 #pragma once
 #include "common.h"
 #include <botan/aead.h>
-#include <botan/hex.h>
 #include <botan/pwdhash.h>
 
 namespace Crypto {

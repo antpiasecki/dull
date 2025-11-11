@@ -2,8 +2,6 @@
 
 #include "ui_mainwindow.h"
 #include "vault.h"
-#include <QMainWindow>
-#include <memory>
 
 class MainWindow : public QMainWindow {
   Q_OBJECT

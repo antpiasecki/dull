@@ -46,8 +46,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>800</width>
-     <height>32</height>
+     <width>900</width>
+     <height>30</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuVault">
@@ -65,6 +65,7 @@
      <string>Files</string>
     </property>
     <addaction name="actionAddFiles"/>
+    <addaction name="actionExtract_All"/>
    </widget>
    <addaction name="menuVault"/>
    <addaction name="menuFiles"/>
@@ -91,6 +92,14 @@
    </property>
    <property name="text">
     <string>Add</string>
+   </property>
+  </action>
+  <action name="actionExtract_All">
+   <property name="icon">
+    <iconset theme="document-save-as"/>
+   </property>
+   <property name="text">
+    <string>Extract All</string>
    </property>
   </action>
  </widget>

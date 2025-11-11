@@ -1,7 +1,6 @@
 // TODO: actual fs
 #include "mainwindow.h"
 #include <QDesktopServices>
-#include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFileDialog>
 #include <QInputDialog>
@@ -9,7 +8,6 @@
 #include <QMimeData>
 #include <QTemporaryDir>
 #include <botan/auto_rng.h>
-#include <botan/hex.h>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(std::make_unique<Ui::MainWindow>()) {
@@ -22,12 +20,12 @@ MainWindow::MainWindow(QWidget *parent)
   connect(ui->actionNew, &QAction::triggered, this, [this]() {
     QString path = QFileDialog::getSaveFileName(this, "Choose vault location",
                                                 QDir::currentPath(),
-                                                "Dull Vaults (*.dull)");
+                                                "Dull vaults (*.dull)");
     if (path.isEmpty()) {
       return;
     }
 
-    if (!path.contains(".dull")) {
+    if (!path.endsWith(".dull")) {
       path += ".dull";
     }
 
@@ -111,6 +109,29 @@ MainWindow::MainWindow(QWidget *parent)
     reload_fs_tree();
     ui->statusbar->showMessage("Added " + QString::number(paths.size()) +
                                " files");
+  });
+
+  connect(ui->actionExtract_All, &QAction::triggered, this, [this]() {
+    if (!m_vault) {
+      return;
+    }
+
+    QString path =
+        QFileDialog::getExistingDirectory(this, "Choose location to extract");
+    if (path.isEmpty()) {
+      return;
+    }
+
+    auto headers = m_vault->read_file_headers();
+    for (const auto &header : headers) {
+      auto content = m_vault->read_file(header.name);
+      if (content) {
+        std::ofstream file(path.toStdString() + "/" + header.name,
+                           std::ios::binary);
+        file.write(content->data(), static_cast<i64>(content->size()));
+      }
+    }
+    ui->statusbar->showMessage("Extracted all files to " + path);
   });
 }
 

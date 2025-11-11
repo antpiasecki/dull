@@ -1,7 +1,6 @@
 #include "vault.h"
 #include "common.h"
 #include "crypto.h"
-#include <array>
 #include <botan/auto_rng.h>
 #include <filesystem>
 
