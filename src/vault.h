@@ -7,7 +7,7 @@
 #include <optional>
 
 constexpr i16 VERSION = 1;
-constexpr u64 AFTER_HEADER_OFFSET = 22;
+constexpr u64 AFTER_HEADER_OFFSET = 68;
 
 // !!! REMEMBER TO UPDATE entry_total_size IN Vault::delete_file
 struct FileHeader {

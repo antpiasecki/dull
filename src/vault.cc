@@ -21,6 +21,15 @@ Vault::Vault(std::string path, const std::string &password)
   ASSERT(m_file.read(to_char_ptr(salt.data()), 16));
 
   m_key = Crypto::derive_key_argon2id(password, salt);
+
+  std::array<u8, 24> check_nonce{};
+  ASSERT(m_file.read(to_char_ptr(check_nonce.data()), 24));
+
+  Botan::secure_vector<u8> check_ciphertext;
+  check_ciphertext.resize(22);
+  ASSERT(m_file.read(to_char_ptr(check_ciphertext.data()), 22));
+
+  Crypto::decrypt_xchacha20_poly1305(check_ciphertext, m_key, check_nonce);
 }
 
 std::vector<FileHeader> Vault::read_file_headers() {

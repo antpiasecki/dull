@@ -1,5 +1,6 @@
 // TODO: actual fs
 #include "mainwindow.h"
+#include "crypto.h"
 #include <QDesktopServices>
 #include <QDropEvent>
 #include <QFileDialog>
@@ -41,13 +42,23 @@ MainWindow::MainWindow(QWidget *parent)
     QCoreApplication::processEvents();
 
     static Botan::AutoSeeded_RNG rng;
-    auto salt_sv = rng.random_vec(16);
-    std::vector<u8> salt(salt_sv.begin(), salt_sv.end());
+    auto salt = rng.random_array<16>();
+
+    auto key = Crypto::derive_key_argon2id(password.toStdString(), salt);
+    auto check_nonce = rng.random_array<24>();
+
+    const std::string content = "LETSGO";
+    Botan::secure_vector<u8> content_sv(content.begin(), content.end());
+    auto check_ciphertext =
+        Crypto::encrypt_xchacha20_poly1305(content_sv, key, check_nonce);
 
     std::ofstream create(path.toStdString(), std::ios::binary);
     create.write("DULL", 4);
     create.write(to_char_ptr(&VERSION), sizeof(VERSION));
     create.write(to_char_ptr(salt.data()), 16);
+
+    create.write(to_char_ptr(check_nonce.data()), 24);
+    create.write(to_char_ptr(check_ciphertext.data()), 22);
     create.close();
 
     m_vault =
@@ -71,16 +82,19 @@ MainWindow::MainWindow(QWidget *parent)
       return;
     }
 
-    // TODO: check if password valid
-
     ui->statusbar->showMessage("Opening the vault...");
     QCoreApplication::processEvents();
 
-    m_vault =
-        std::make_unique<Vault>(path.toStdString(), password.toStdString());
-    reload_fs_tree();
-
-    ui->statusbar->clearMessage();
+    try {
+      m_vault =
+          std::make_unique<Vault>(path.toStdString(), password.toStdString());
+      reload_fs_tree();
+      ui->statusbar->clearMessage();
+    } catch (const Botan::Invalid_Authentication_Tag &e) {
+      QMessageBox::critical(this, "Error", "Invalid password.");
+      ui->statusbar->clearMessage();
+      return;
+    }
   });
 
   connect(
